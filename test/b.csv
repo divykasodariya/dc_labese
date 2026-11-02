@@ -1,0 +1,6 @@
+nodeid,clock,ismaster
+1,100,true
+2,120,false
+3,150,false
+4,80,false
+5,90,false

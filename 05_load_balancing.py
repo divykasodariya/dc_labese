@@ -1,48 +1,61 @@
+
 import csv
-from pathlib import Path
+import os
 
-CSV_FILE = "workload.csv"
-FIELDS = ["job_id", "compute_units", "assigned_worker", "status"]
+CSV = "workload.csv"
+
 WORKERS = ["Worker_1", "Worker_2", "Worker_3"]
-METHOD = "least"  # Change to "round_robin" for Round Robin.
 
-def create_sample():
-    if not Path(CSV_FILE).exists():
-        with open(CSV_FILE, "w", newline="") as f:
-            w = csv.writer(f)
-            w.writerow(FIELDS)
-            w.writerows([
-                ["J101", 35, "UNASSIGNED", "PENDING"],
-                ["J102", 20, "UNASSIGNED", "PENDING"],
-                ["J103", 50, "UNASSIGNED", "PENDING"],
-                ["J104", 15, "UNASSIGNED", "PENDING"],
-                ["J105", 40, "UNASSIGNED", "PENDING"],
-            ])
+METHOD = "least"  # "least" or "round_robin"
 
-def main():
-    create_sample()
-    with open(CSV_FILE, newline="") as f:
-        jobs = list(csv.DictReader(f))
+# Create sample CSV if it doesn't exist
+if not os.path.exists(CSV):
+    with open(CSV, "w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["job_id", "compute_units", "assigned_worker", "status"])
+        w.writerows([
+            ["J101", 35, "UNASSIGNED", "PENDING"],
+            ["J102", 20, "UNASSIGNED", "PENDING"],
+            ["J103", 50, "UNASSIGNED", "PENDING"],
+            ["J104", 15, "UNASSIGNED", "PENDING"],
+            ["J105", 40, "UNASSIGNED", "PENDING"]
+        ])
 
-    loads = {worker: 0 for worker in WORKERS}
-    counts = {worker: 0 for worker in WORKERS}
-    print(f"Load balancing method: {METHOD}\n")
+# Read jobs
+jobs = []
 
-    for index, job in enumerate(jobs):
-        if METHOD == "round_robin":
-            worker = WORKERS[index % len(WORKERS)]
-        else:
-            # Least current compute load.
-            worker = min(WORKERS, key=lambda name: loads[name])
+with open(CSV, "r") as f:
+    for row in csv.DictReader(f):
+        jobs.append(row)
 
-        units = int(job["compute_units"])
-        loads[worker] += units
-        counts[worker] += 1
-        print(f"Job {job['job_id']} ({units} units) -> {worker}")
+# Initialize worker loads and job counts
+loads = {}
+counts = {}
 
-    print("\nFinal worker load:")
-    for worker in WORKERS:
-        print(f"{worker}: {loads[worker]} compute units, {counts[worker]} jobs")
+for worker in WORKERS:
+    loads[worker] = 0
+    counts[worker] = 0
 
-if __name__ == "__main__":
-    main()
+print("Method:", METHOD)
+# jobs.sort(key = lambda s : s['job_id'])
+# Assign jobs
+for i, job in enumerate(jobs):
+
+    if METHOD == "round_robin":
+        worker = WORKERS[i % len(WORKERS)]
+
+    else:
+        worker = min(loads, key=loads.get)
+
+    units = int(job["compute_units"])
+
+    loads[worker] += units
+    counts[worker] += 1
+
+    print(job["job_id"], "->", worker)
+
+# Display final results
+print("\nFinal Worker Load:")
+
+for worker in WORKERS:
+    print(worker, ":", loads[worker], "units,", counts[worker], "jobs")

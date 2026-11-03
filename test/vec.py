@@ -1,131 +1,69 @@
 
 import csv
 import os
+import threading
+import time
 
-CSV = "vector_events.csv"
+CSV = "tasks_4.csv"
 
-PROCESSES = ["P1", "P2", "P3"]
+lock = threading.Lock()
+completed = []
 
 # Create CSV if it doesn't exist
 if not os.path.exists(CSV):
     with open(CSV, "w", newline="") as f:
         w = csv.writer(f)
-        w.writerow(["event_id", "process_id", "event_action", "target_process"])
+        w.writerow(["task_id", "thread_name", "burst_ms", "priority", "status"])
         w.writerows([
-            ["E1", "P1", "SEND", "P2"],
-            ["E2", "P2", "RECEIVE", "P1"],
-            ["E3", "P2", "LOCAL", ""],
-            ["E4", "P3", "LOCAL", ""],
-            ["E5", "P1", "LOCAL", ""]
+            ["T1", "Worker_1", 300, "HIGH", "PENDING"],
+            ["T2", "Worker_2", 200, "MEDIUM", "PENDING"],
+            ["T3", "Worker_3", 400, "LOW", "PENDING"],
+            ["T4", "Worker_1", 250, "HIGH", "PENDING"]
         ])
 
-# Read CSV
-events = []
+# Read tasks
+tasks = []
 
 with open(CSV, "r") as f:
     for row in csv.DictReader(f):
-        events.append(row)
-
-# Initialize vector clocks
-clocks = {}
-
-for p in PROCESSES:
-    clocks[p] = [0, 0, 0]
-
-messages = {}
-results = []
-
-# Process events
-for e in events:
-
-    eid = e["event_id"]
-    process = e["process_id"].strip()
-    kind = e["event_action"].strip().upper()
-    peer = e["target_process"].strip()
-
-    if process not in clocks:
-        print("Unknown process:", process)
-        break
-
-    index = PROCESSES.index(process)
-
-    # SEND
-    if kind == "SEND":
-
-        clocks[process][index] += 1
-
-        timestamp = clocks[process].copy()
-
-        key = (process, peer)
-
-        if key not in messages:
-            messages[key] = []
-
-        messages[key].append(timestamp)
-
-        print(eid, process, "SEND to", peer, "Clock:", timestamp)
-
-    # RECEIVE
-    elif kind == "RECEIVE":
-
-        key = (peer, process)
-
-        if key not in messages or not messages[key]:
-            print("No matching message found!")
-            break
-
-        received = messages[key].pop(0)
-
-        # Merge received vector with local vector
-        for i in range(len(PROCESSES)):
-            clocks[process][i] = max(clocks[process][i], received[i])
-
-        # Increment own component
-        clocks[process][index] += 1
-
-        timestamp = clocks[process].copy()
-
-        print(eid, process, "RECEIVE from", peer, "Clock:", timestamp)
-
-    # LOCAL
-    elif kind == "LOCAL":
-
-        clocks[process][index] += 1
-
-        timestamp = clocks[process].copy()
-
-        print(eid, process, "LOCAL Clock:", timestamp)
-
-    else:
-        print("Invalid event:", kind)
-        break
-
-    results.append((eid, process, timestamp))
+        tasks.append(row)
 
 
-# Compare event vectors
-print("\nCausal Ordering:")
+# Function executed by each thread
+def process_task(task):
 
-for i in range(len(results)):
-    for j in range(i + 1, len(results)):
+    tid = task["task_id"]
+    worker = task["thread_name"]
 
-        id1, p1, v1 = results[i]
-        id2, p2, v2 = results[j]
+    print(worker, "waiting for", tid)
 
-        if all(v1[k] <= v2[k] for k in range(3)) and any(v1[k] < v2[k] for k in range(3)):
-            print(id1, "->", id2, "(Causally Precedes)")
+    time.sleep(int(task["burst_ms"]) / 1000)
 
-        elif all(v2[k] <= v1[k] for k in range(3)) and any(v2[k] < v1[k] for k in range(3)):
-            print(id2, "->", id1, "(Causally Precedes)")
+    # Critical section
+    lock.acquire()
 
-        elif v1 == v2:
-            print(id1, "and", id2, "(Equal Vectors)")
+    print(worker, "LOCK ACQUIRED")
 
-        else:
-            print(id1, "||", id2, "(Concurrent)")
+    completed.append(tid)
+
+    print(tid, "COMPLETED")
+
+    lock.release()
+
+    print(worker, "LOCK RELEASED")
 
 
-print("\nFinal Vector Clocks:")
+# Start threads
+threads = []
 
-for p in PROCESSES:
-    print(p, ":", clocks[p])
+for task in tasks:
+    t = threading.Thread(target=process_task, args=(task,))
+    t.start()
+    threads.append(t)
+
+# Wait for all threads
+for t in threads:
+    t.join()
+
+print("\nFinal Completed Tasks:")
+print(completed)
